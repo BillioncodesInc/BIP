@@ -5,9 +5,9 @@ import { supabase } from '../lib/supabase';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (username: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  register: (email: string, password: string, role: 'root' | 'regular') => Promise<void>;
+  register: (email: string, username: string, password: string, role: 'root' | 'regular') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,9 +31,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (username: string, password: string) => {
+    // First, get the email associated with the username
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('email')
+      .eq('username', username)
+      .single();
+
+    if (userError || !userData) {
+      throw new Error('Invalid username');
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: userData.email,
       password,
     });
 
@@ -45,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
-  const register = async (email: string, password: string, role: 'root' | 'regular') => {
+  const register = async (email: string, username: string, password: string, role: 'root' | 'regular') => {
     const { error: signUpError, data } = await supabase.auth.signUp({
       email,
       password,
@@ -60,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         {
           id: data.user?.id,
           email,
-          username: email.split('@')[0],
+          username,
           role: role === 'root' ? 'root' : 'admin',
         }
       ]);
